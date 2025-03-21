@@ -19,108 +19,116 @@ std::string parse_first_line (std::string line) {
     return first_line;
 }
 
-bool arrangement_is_valid(std::vector<std::string> employee_sells, std::string line, int curr_col) {
+bool arrangement_is_valid(
+    std::vector<std::string> employee_sells,
+    std::string line,
+    int curr_col,
+    bool last_line
+) {
     if (line.size() == 0 && employee_sells[employee_sells.size() - 1] == "") return false;
     if (employee_sells[curr_col].size() > 1 && employee_sells[curr_col][0] == '0') return false;
-    if (curr_col < employee_sells.size() - 1 && employee_sells[curr_col].size() > 3) return false;
+    if (curr_col < employee_sells.size() - 1) {
+        if (employee_sells[curr_col].size() > (3 + last_line)) return false;
+    }
+    else {
+        if (employee_sells[curr_col].size() > (4 + last_line)) return false;
+    }
+    for (int i = 0; i < curr_col; i++) if (employee_sells[i] == "") return false;
     return true;
 }
 
 bool check_sum(std::vector<std::string> values) {
+    if (values[values.size() - 1].size() > 4) return false;
     int sum = 0;
     for (int i = 0; i < values.size() - 1; i++) sum += std::stoi(values[i]);
     return sum == std::stoi(values[values.size() - 1]);
 }
 
 // Backtracking
-std::pair<bool, std::vector<std::string>> split_values(
+void split_values(
     std::string line,
+    bool last_line,
     std::vector<std::string> employee_sells,
-    int curr_col
+    int curr_col,
+    std::set<std::vector<int>> *valid_solutions
 ) {
-    if (!arrangement_is_valid(employee_sells, line, curr_col)) return {false, employee_sells};
+    if (!arrangement_is_valid(employee_sells, line, curr_col, last_line)) return;
     if (curr_col == employee_sells.size() - 1 && line.size() == 0) {
-        // return check_sum(employee_sells) ? &employee_sells : nullptr;
-        return {check_sum(employee_sells), employee_sells};
+        if (check_sum(employee_sells)) {
+            std::vector<int> valid_solution;
+            for (const std::string& value : employee_sells) valid_solution.push_back(std::stoi(value));
+            valid_solutions->insert(valid_solution);
+        }
+        return;
     }
 
     // Try increase current column
     employee_sells[curr_col] += line[0];
-    std::pair<bool, std::vector<std::string>> answer = split_values(line.substr(1), employee_sells, curr_col);
-    if (answer.first) return answer;
-    else employee_sells[curr_col] = employee_sells[curr_col].substr(0, employee_sells[curr_col].size() - 1);
-
+    split_values(line.substr(1), last_line, employee_sells, curr_col, valid_solutions);
+    
     // Try increase next column
     if (curr_col < employee_sells.size() - 1) {
+        employee_sells[curr_col] = employee_sells[curr_col].substr(0, employee_sells[curr_col].size() - 1);
         employee_sells[curr_col + 1] += line[0];
-        return split_values(line.substr(1), employee_sells, curr_col + 1);
+        return split_values(line.substr(1), last_line, employee_sells, curr_col + 1, valid_solutions);
     }
-    else return {false, employee_sells};
 }
 
-std::string backtrack(
+std::set<std::vector<int>> backtrack(
     int columns,
-    std::string line
+    std::string line,
+    bool last_line = false
 ) {
-    std::string answer = "";
+    std::set<std::vector<int>> valid_answers;
 
     std::vector<std::string> employee_sells(columns, "");
-    std::vector<std::string> backtrack_answer = split_values(line, employee_sells, 0).second;
+    split_values(line, last_line, employee_sells, 0, &valid_answers);
 
-    for (const std::string& value : backtrack_answer) answer += " " + value;
-    return answer;
+    return valid_answers;
 }
 
-std::string parse_employee_line(std::string line, int columns) {
-    std::string employee_line = "";
-
+std::pair<std::string, std::set<std::vector<int>>> parse_employee_data(
+    std::string line,
+    int columns
+) {
     std::string name = "";
     for (const char& c : line) {
         if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) name += c;
         else break;
     }
 
-    employee_line += name;
     line = line.substr(name.size());
+    std::set<std::vector<int>> values = backtrack(columns, line);
 
-    std::string values = backtrack(columns, line);
-    employee_line += values;
-
-    return employee_line;
+    return {name, values};
 }
 
-std::vector<int> extract_employee_values(std::string employee_line, int columns) {
-    std::vector<int> employee_values;
-    
-    std::stringstream values;
-    values << employee_line.substr(employee_line.find(' ') + 1);
-    
-    while (columns--) {
-        int value;
-        values >> value;
-        employee_values.push_back(value);
+bool validate_table(std::vector<std::vector<int>> valid_solution) {
+    for (int i = 0; i < valid_solution[0].size(); i++) {
+        int col_sum = 0;
+        for (int j = 0; j < valid_solution.size() - 1; j++) col_sum += valid_solution[j][i];
+        if (col_sum != valid_solution[valid_solution.size() - 1][i]) return false;
     }
-    
-    return employee_values;
+    return true;
 }
 
-std::string parse_last_line(int columns, std::vector<std::vector<int>> table_values) {
-    std::string last_line = "TP";
+bool determine_valid_solution(
+    std::vector<std::set<std::vector<int>>> table_values,
+    std::vector<std::vector<int>> *valid_solution,
+    int curr_table_line
+) {
+    if (curr_table_line == table_values.size()) return validate_table(*valid_solution);
 
-    std::vector<int> values_sum(columns, 0);
-    for (const std::vector<int>& table_line : table_values) {
-        for (int i = 0; i < table_line.size(); i++) {
-            values_sum[i] += table_line[i];
-        }
+    for (const std::vector<int> &possible_solution : table_values[curr_table_line]) {
+        valid_solution->push_back(possible_solution);
+        if (determine_valid_solution(table_values, valid_solution, curr_table_line+1)) return true;
+        else valid_solution->pop_back();
     }
 
-    for (const int& value : values_sum) last_line += " " + std::to_string(value);
-    return last_line;
+    return false;
 }
 
 int main() {
-    std::vector<std::string> answers;
-
     std::string test_cases_line;
     std::getline(std::cin, test_cases_line);
     int test_cases = std::stoi(test_cases_line);
@@ -130,7 +138,6 @@ int main() {
         std::getline(std::cin, line);
         
         std::string header = parse_first_line(line);
-        answers.push_back(header);
 
         int columns = 0;
         for (const char& c : header) {
@@ -138,21 +145,34 @@ int main() {
         }
         columns++;
 
-        std::vector<std::vector<int>> table_values;
+        std::vector<std::set<std::vector<int>>> table_values;
         while(std::getline(std::cin, line)) {
             if (line[0] == 'T' && line[1] == 'P') {
-                answers.push_back(parse_last_line(columns, table_values));
+                std::set<std::vector<int>> total_sum_possibilities = backtrack(columns, line.substr(2), true);
+                table_values.push_back(total_sum_possibilities);
                 break;
             }
             else {
-                std::string employee_line = parse_employee_line(line, columns);
-                answers.push_back(employee_line);
-                table_values.push_back(extract_employee_values(employee_line, columns));
+                std::pair<std::string, std::set<std::vector<int>>> employee_data = parse_employee_data(line, columns);
+                table_values.push_back(employee_data.second);
             }
         }
-    }
 
-    for (std::string& answer : answers) std::cout << answer << std::endl;
+        std::vector<std::vector<int>> valid_solution;
+        determine_valid_solution(table_values, &valid_solution, 0);
+
+        std::cout << header << std::endl;
+        for (int i = 0; i < valid_solution.size(); i++) {
+            std::vector<int> table_line = valid_solution[i];
+
+            std::string full_line = "";
+            for (const int &number : table_line) full_line += std::to_string(number) + " ";
+            full_line.erase(full_line.size() - 1);
+
+            if (i == valid_solution.size() - 1) std::cout << "TP ";
+            std::cout << full_line << std::endl;
+        }
+    }
 
     return 0;
 }
