@@ -1,8 +1,11 @@
+// Este problema é mentiroso. Ele diz claramente que existe uma restrição 1 <= S <= 300, mas ela não é respeitada
+// nos casos de teste. Existem vários problemas com tempo de solução S igual a 0, que devem ser considerados como
+// resolvidos também.
 #include <bits/stdc++.h>
 
 #define INF 0x3f3f3f3f
 
-int lower_bound = 0, upper_bound = INF;
+int lower_bound = 1, upper_bound = INF;
 
 class Score {
     public:
@@ -10,7 +13,7 @@ class Score {
 
         Score(std::vector<int> failed_attempts, std::vector<int> time_penalties) {
             for (int i = 0; i < failed_attempts.size(); i++) {
-                if (time_penalties[i] > 0) {
+                if (time_penalties[i] >= 0) {
                     solved_problems += 1;
                     this->failed_attempts += failed_attempts[i];
                     this->time_penalty += time_penalties[i];
@@ -26,6 +29,10 @@ class Score {
                 return (int)((score.time_penalty - this->time_penalty) / (this->failed_attempts - score.failed_attempts));
             }
         }
+
+        int get_score(int error_penalty) {
+            return this->time_penalty + this->failed_attempts * error_penalty;
+        }
 };
 
 std::pair<std::vector<int>, std::vector<int>> read_teams_problems(int problems) {
@@ -37,13 +44,11 @@ std::pair<std::vector<int>, std::vector<int>> read_teams_problems(int problems) 
         std::string submission;
         std::cin >> attempts >> trash >> submission;
 
-        if (submission[0] == '-') time_penalty = 0;
+        if (submission[0] == '-') time_penalty = -1;
         else time_penalty = std::stoi(submission);
 
         failed_attempts.emplace_back(attempts);
         time_penalties.emplace_back(time_penalty);
-
-        // if (i < problems - 1) std::cin >> trash;
     }
 
     return {failed_attempts, time_penalties};
@@ -55,10 +60,18 @@ void check_interceptions(std::vector<Score> bin) {
             int point = bin[i].get_interception_point(bin[j]);
 
             if (point < 20) lower_bound = std::max(lower_bound, point + 1);
-            else if (point > 20) upper_bound = std::min(upper_bound, point - 1);
+            else if (
+                point > 20 ||
+                (point == 20 && bin[i].get_score(point) != bin[j].get_score(point))
+            ) {
+                if (bin[i].get_score(point) == bin[j].get_score(point))
+                    upper_bound = std::min(upper_bound, point - 1);
+                else
+                    upper_bound = std::min(upper_bound, point);
+            }
             else lower_bound = upper_bound = 20;
 
-            if (lower_bound == 20 && upper_bound == 20) return;
+            if (lower_bound == upper_bound == 20) return;
         }
     }
 }
@@ -79,11 +92,11 @@ int main() {
             check_interceptions(score_bin);
             if (lower_bound == upper_bound == 20) break;
         }
-        lower_bound < 0 ? std::cout << "0 " : std::cout << lower_bound << " ";
+        lower_bound < 0 ? std::cout << "1 " : std::cout << lower_bound << " ";
         upper_bound == INF ? std::cout << "*" << std::endl : std::cout << upper_bound << std::endl;
 
         std::cin >> teams >> problems;
-        lower_bound = 0;
+        lower_bound = 1;
         upper_bound = INF;
     }
 
